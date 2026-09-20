@@ -666,7 +666,7 @@ def main() -> None:
             if ready:
                 #确定运行模式（Determine the running mode）
                 uxRunning: bool = localeManager.check_running_client(product, patchline)
-                if uxRunning or product == "TFT" or localeManager.locale != "zh_CN": #当客户端正在运行时，只需要修改一次。另外，国际服的云顶客户端原生支持简体中文，因此也只需要修改一次就可生效（When the client is running, this change only needs making once）
+                if uxRunning or product == "TFT": #当客户端正在运行时，只需要修改一次。另外，国际服的云顶客户端原生支持简体中文，因此也只需要修改一次就可生效（When the client is running, this change only needs making once）
                     status: int = change_gt_locale(localeManager, product, patchline)
                     if status == 0:
                         print(f"已修改{patchline_loc_zh}{client_loc_zh}的语言配置。请在拳头客户端已激活的情况下退出{client_loc_zh}，或者登出{client_loc_zh}。\n{patchline_loc_en} {client_loc_en} language configuration has been changed. Please exit {client_loc_en} ensuring Riot Client has been activated, or sign out of {client_loc_en}.")
