@@ -195,7 +195,7 @@ class LoLLocaleManager:
                     print("路径不存在。请重新输入。\nPath not found. Please try again.")
                 elif not os.path.isfile(uxPath_tmp):
                     print("请输入一个文件。\nPlease input a file.")
-                elif not os.path.basename(uxPath_tmp) == "LeagueClientUx.exe":
+                elif not os.path.basename(uxPath_tmp) == "TFTClient-Win64-Shipping.exe":
                     print(f"请输入{patchline_loc_zh}云顶之弈客户端的可执行文件路径。\nPlease input a path of {patchline_loc_en} TFT Client executable.")
                 else:
                     if patchline == "live":
@@ -266,6 +266,7 @@ class LoLLocaleManager:
             locPath_ux_key = "locPath_lol_ux_live" if patchline == "live" else "locPath_lol_ux_pbe"
         client_loc_zh: str = "联盟客户端" if product == "LoL" else "云顶客户端"
         client_loc_en: str = "League Client" if product == "LoL" else "TFT Client"
+        product_name: str = "league_of_legends" if product == "LoL" else "teamfighttactics"
         patchline_loc_zh: str = "正式服" if patchline == "live" else "测试服"
         patchline_loc_en: str = "Live" if patchline == "live" else "PBE"
         #函数主体（Function body）
@@ -284,7 +285,7 @@ class LoLLocaleManager:
                     print("路径不存在。请重新输入。\nPath not found. Please try again.")
                 elif not os.path.isfile(locPath_ux_tmp):
                     print("请输入一个文件。\nPlease input a file.")
-                elif not os.path.basename(locPath_ux_tmp) == f"league_of_legends.{patchline}.product_settings.yaml":
+                elif not os.path.basename(locPath_ux_tmp) == f"{product_name}.{patchline}.product_settings.yaml":
                     print(f"请输入{patchline_loc_zh}{client_loc_zh}的语言配置文件路径。\nPlease input a path of {patchline_loc_en} {client_loc_en} language configuration file.")
                 else:
                     if patchline == "live":
