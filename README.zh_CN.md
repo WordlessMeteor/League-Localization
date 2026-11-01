@@ -24,6 +24,101 @@
     - 图文示范可参考[模块：Python安装与全局环境配置](https://zhuanlan.zhihu.com/p/2038292227298996375)一文。
     - 安装前请确保“Add Python.exe to PATH”选项已勾选。
 2. 在命令提示符中输入`pip install ruamel.yaml`以安装ruamel.yaml库。
+3. 复制以下内容，粘贴到记事本，并进行适当改动，保存到用户文件夹（`C:/Users/[用户名]/`）下的“lol-l10n.ini”文件。
+    ```ini
+    [paths]
+    install_dir = C:/Riot Games
+    program_data_dir = C:/ProgramData/Riot Games
+    riot_client_config_dir = C:/Users/19250/AppData/Local/Riot Games/Riot Client/Config
+    rc_exe = 
+    lol_ux_live = 
+    lol_ux_pbe = 
+    tft_exe_live = 
+    tft_exe_pbe = 
+    loc_rc = 
+    loc_lol_live = 
+    loc_lol_pbe = 
+    loc_tft_live = 
+    loc_tft_pbe = 
+    ```
+
+下表给出了各路径的含义以及用户如何去填写这些路径。
+<table>
+    <thead>
+        <tr>
+            <th style="text-align:center;">参数名</th>
+            <th style="text-align:center;">含义</th>
+            <th style="text-align:center;">默认用户操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="text-align:center;">install_dir</td>
+            <td>拳头游戏的安装目录。</td>
+            <td>用户需要更改。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">program_data_dir</td>
+            <td>程序数据目录。</td>
+            <td>一般不需要变动。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">riot_client_config_dir</td>
+            <td>拳头游戏配置目录。</td>
+            <td>一般变动用户名即可。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">rc_exe</td>
+            <td>拳头客户端可执行文件路径。</td>
+            <td>留空即可。程序会根据`install_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">lol_ux_live</td>
+            <td>正式服联盟客户端用户体验界面可执行文件路径。</td>
+            <td>留空即可。程序会根据`install_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">lol_ux_pbe</td>
+            <td>测试服联盟客户端用户体验界面可执行文件路径。</td>
+            <td>留空即可。程序会根据`install_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">tft_exe_live</td>
+            <td>正式服云顶客户端可执行文件路径。</td>
+            <td>留空即可。程序会根据`install_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">tft_exe_pbe</td>
+            <td>测试服云顶客户端可执行文件路径。</td>
+            <td>留空即可。程序会根据`install_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_rc</td>
+            <td>拳头客户端语言配置文件路径。</td>
+            <td>留空即可。程序会根据`riot_client_config_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_lol_live</td>
+            <td>正式服联盟客户端语言配置文件路径。</td>
+            <td>留空即可。程序会根据`program_data_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_lol_pbe</td>
+            <td>测试服联盟客户端语言配置文件路径。</td>
+            <td>留空即可。程序会根据`program_data_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_tft_live</td>
+            <td>正式服云顶客户端语言配置文件路径。</td>
+            <td>留空即可。程序会根据`program_data_dir`自动生成该路径。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_tft_pbe</td>
+            <td>测试服云顶客户端语言配置文件路径。</td>
+            <td>留空即可。程序会根据`program_data_dir`自动生成该路径。</td>
+        </tr>
+    </tbody>
+<table>
 
 ## 使用方法
 请**以管理员身份运行**此程序。下面提供两种方法：
@@ -33,7 +128,9 @@
     3. 使用`cd`命令切换到存储库目录。
         - 例如，我的存储库的路径是`C:\Users\19250\Documents\GitHub\League-Localization`，则输入`cd "C:\Users\19250\Documents\GitHub\League-Localization"`。
     4. 输入`python 汉化联盟客户端.py`。
-        - 可以通过`-l`参数指定目标语言。默认是“中文（中国）”。完整参数见下面的“参数说明”章节。
+        - 可以通过`-l`参数指定目标语言。默认是“中文（中国）”。
+        - 可以通过`-c`参数指定配置文件。
+        - 完整参数见下面的“参数说明”章节。
 2. 在桌面创建一个以管理员身份运行的快捷方式。随后双击该快捷方式即可运行。
     1. 打开命令提示符，输入`where python`。
         - 如果没有任何输出，请先到[Python官网](https://www.python.org)下载和安装Python。
@@ -77,6 +174,11 @@
             <td style="text-align:center;">-i</td>
             <td style="text-align:center;">--interval</td>
             <td>检测间隔。默认为0.5秒，即每隔0.5秒校正一次语言配置文件。</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">-c</td>
+            <td style="text-align:center;">--config</td>
+            <td>适用于本程序的配置文件路径。默认是用户文件夹下的“lol-i10n.ini”。</td>
         </tr>
     </tbody>
 <table>

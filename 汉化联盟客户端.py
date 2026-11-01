@@ -1,4 +1,4 @@
-import argparse, msvcrt, os, psutil, time
+import argparse, configparser, msvcrt, os, psutil, time
 from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString #使得列表元素强制使用双引号【Force to use double quotes for an element in a list (CommentedSeq)】
 from typing import Any, Optional
@@ -17,12 +17,136 @@ TFT_LIVE_CLIENT_PATH: str = "C:/Riot Games/Teamfight Tactics/Live/TFT/Binaries/W
 TFT_PBE_CLIENT_PATH: str = "C:/Riot Games/Teamfight Tactics/PBE/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe"
 TFT_LIVE_LOC_PATH: str = "C:/ProgramData/Riot Games/Metadata/teamfighttactics.live/teamfighttactics.live.product_settings.yaml"
 TFT_PBE_LOC_PATH: str = "C:/ProgramData/Riot Games/Metadata/teamfighttactics.pbe/teamfighttactics.pbe.product_settings.yaml"
+DEFAULT_CONFIG_PATH: str = os.path.expanduser("~/lol-l10n.ini").replace("\\", "/")
+DEFAULT_CONFIG_OBJ: dict[str, dict[str, str]] = {
+    "paths": {
+        "install_dir": "C:/Riot Games",
+        "program_data_dir": "C:/ProgramData/Riot Games",
+        "riot_client_config_dir": os.path.expanduser("~/AppData/Local/Riot Games/Riot Client/Config").replace("\\", "/"),
+        "rc_exe": "",
+        "lol_ux_live": "",
+        "lol_ux_pbe": "",
+        "tft_exe_live": "",
+        "tft_exe_pbe": "",
+        "loc_rc": "",
+        "loc_lol_live": "",
+        "loc_lol_pbe": "",
+        "loc_tft_live": "",
+        "loc_tft_pbe": ""
+    }
+}
+DEFAULT_CONFIG_STR: str = "\n" + "\n".join([f"[{scope_key}]\n" + "\n".join([f"{key} = {value}" for key, value in scope.items()]) + "\n" for scope_key, scope in DEFAULT_CONFIG_OBJ.items()])
+
+#定义一些配置文件的操作函数（Define some functions that operation the configuration file）
+def load_config(config_path: str) -> configparser.ConfigParser:
+    '''
+    读取配置文件。<br>Load configuration file.
+    
+    :param config_path: 配置文件路径。<br>Path of configuration file.
+    :type config_path: str
+    :return: 配置文件对象。<br>Configuration file object.
+    :rtype: configparser.ConfigParser
+    '''
+    cfg: configparser.ConfigParser = configparser.ConfigParser()
+    if os.path.exists(config_path) and os.path.isfile(config_path):
+        cfg.read(config_path, encoding = "utf-8")
+    else:
+        cfg.read_string(DEFAULT_CONFIG_STR)
+        with open(config_path, "w", encoding = "utf-8") as fp:
+            cfg.write(fp)
+    if not cfg.has_section("paths"):
+        cfg.add_section("paths")
+    for key, default_value in DEFAULT_CONFIG_OBJ["paths"].items():
+        if not cfg.has_option("paths", key):
+            cfg.set("paths", key, default_value)
+    return cfg
+
+def save_config(config_path: str, cfg: configparser.ConfigParser) -> None:
+    '''
+    保存配置文件。<br>Save configuration file.
+    
+    :param config_path: 配置文件路径。<br>Path of configuration file.
+    :type config_path: str
+    :param cfg: 配置文件对象。<br>Configuration file object.
+    :type cfg: configparser.ConfigParser
+    '''
+    with open(config_path, "w", encoding = "utf-8") as fp:
+        cfg.write(fp)
+
+def derive_paths(cfg: configparser.ConfigParser) -> dict[str, str]:
+    '''
+    从配置文件对象中派生出各路径。<br>Derive paths from configuration file object.
+    
+    通过下面的目录派生其所包含的文件的路径：<br>Derive the paths of files contained in the following directories:
+    - install_dir: 拳头游戏安装目录。<br>Riot games installation directory.
+        - rc_exe: 拳头客户端可执行文件路径。<br>Riot Client executable path.
+        - lol_ux_live: 正式服联盟客户端用户体验界面可执行文件路径。<br>Live League Client User Experience executable file path.
+        - lol_ux_pbe: 测试服联盟客户端用户体验界面可执行文件路径。<br>PBE League Client User Experience executable file path.
+        - tft_exe_live: 正式服云顶客户端可执行文件路径。<br>Live TFT Client executable path.
+        - tft_exe_pbe: 测试服云顶客户端可执行文件路径。<br>PBE TFT Client executable path.
+    - program_data_dir: 拳头游戏程序数据目录。<br>Riot games program data directory.
+        - loc_rc: 拳头客户端语言配置文件路径。<br>Riot Client language configuration file path.
+    - riot_client_config_dir: 拳头客户端配置目录。<br>Riot Client configuration directory.
+        - loc_lol_live: 正式服联盟客户端语言配置文件路径。<br>Live League Client language configuration file path.
+        - loc_lol_pbe: 测试服联盟客户端语言配置文件路径。<br>PBE League Client language configuration file path.
+        - loc_tft_live: 正式服云顶客户端语言配置文件路径。<br>Live TFT Client language configuration file path.
+        - loc_tft_pbe: 测试服云顶客户端语言配置文件路径。<br>PBE TFT Client language configuration file path.
+    
+    :param cfg: 配置文件对象。<br>Configuration file object.
+    :type cfg: configparser.ConfigParser
+    :return: 各路径的字典。<br>Dictionary of paths.
+    :rtype: dict[str, str]
+    '''
+    def norm_path(p: str) -> str:
+        '''
+        标准化路径写法。<br>Normalize path writing.
+        
+        :param p: 待处理的路径。<br>Path to be processed.
+        :type p: str
+        :return: 标准化后的路径。<br>Normalized path.
+        :rtype: str
+        '''
+        return os.path.expanduser(p).replace("\\", "/").rstrip("/")
+    
+    install_dir: str = norm_path(cfg.get("paths", "install_dir"))
+    pd_dir: str = norm_path(cfg.get("paths", "program_data_dir"))
+    rc_cfg_dir: str = norm_path(cfg.get("paths", "riot_client_config_dir"))
+
+    derived: dict[str, str] = {
+        "rcPath": f"{install_dir}/Riot Client/RiotClientServices.exe",
+        "lolUxPath_live": f"{install_dir}/League of Legends/LeagueClientUx.exe",
+        "lolUxPath_pbe": f"{install_dir}/League of Legends (PBE)/LeagueClientUx.exe",
+        "tftClientPath_live": f"{install_dir}/Teamfight Tactics/Live/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe",
+        "tftClientPath_pbe": f"{install_dir}/Teamfight Tactics/PBE/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe",
+        "locPath_rc": f"{rc_cfg_dir}/RiotClientSettings.yaml",
+        "locPath_lol_ux_live": f"{pd_dir}/Metadata/league_of_legends.live/league_of_legends.live.product_settings.yaml",
+        "locPath_lol_ux_pbe": f"{pd_dir}/Metadata/league_of_legends.pbe/league_of_legends.pbe.product_settings.yaml",
+        "locPath_tft_live": f"{pd_dir}/Metadata/teamfighttactics.live/teamfighttactics.live.product_settings.yaml",
+        "locPath_tft_pbe": f"{pd_dir}/Metadata/teamfighttactics.pbe/teamfighttactics.pbe.product_settings.yaml",
+    }
+    override_map: dict[str, str] = {
+        "rcPath": "rc_exe",
+        "lolUxPath_live": "lol_ux_live",
+        "lolUxPath_pbe": "lol_ux_pbe",
+        "tftClientPath_live": "tft_exe_live",
+        "tftClientPath_pbe":  "tft_exe_pbe",
+        "locPath_rc": "loc_rc",
+        "locPath_lol_ux_live": "loc_lol_live",
+        "locPath_lol_ux_pbe": "loc_lol_pbe",
+        "locPath_tft_live": "loc_tft_live",
+        "locPath_tft_pbe": "loc_tft_pbe",
+    } #存储语言管理器中的路径属性成员的名称和配置文件中的键名的映射关系（Store the mapping between the names of path attributes in the locale manager and the key names in the configuration file）
+    for attr, key in override_map.items():
+        v: str = cfg.get("paths", key, fallback = "").strip()
+        if bool(v):
+            derived[attr] = norm_path(v)
+    return derived
 
 def isKeyPressed(keyCode1: bytes, keyCode2: bytes = b"") -> bool:
     return bool(msvcrt.kbhit()) and msvcrt.getch() == keyCode1 and (keyCode1 != b"\xe0" and keyCode1 != b"\000" or msvcrt.getch() == keyCode2)
 
 class LoLLocaleManager:
-    def __init__(self, locale: str = "zh_CN", interval: float = 0.5) -> None:
+    def __init__(self, locale: str = "zh_CN", interval: float = 0.5, config_path: str = DEFAULT_CONFIG_PATH) -> None:
         '''
         构建一个语言管理器对象。<br>Construct a `LoLLocaleManager` object.
         
@@ -33,16 +157,20 @@ class LoLLocaleManager:
         '''
         self.locale: str = locale #目标语言文化代码（Target language code）
         self.interval: float = interval #循环修改时的读取间隔（Time interval between two reads in Loop Edit mode）
-        self.rcPath: str = "C:/Riot Games/Riot Client/RiotClientServices.exe" #拳头客户端的可执行文件路径（Path of Riot Client executable）
-        self.lolUxPath_live: str = "C:/Riot Games/League of Legends/LeagueClientUx.exe" #正式服联盟客户端用户体验界面可执行文件路径（Path of Live League Client User Experience executable file）
-        self.lolUxPath_pbe: str = "C:/Riot Games/League of Legends (PBE)/LeagueClientUx.exe" #测试服联盟客户端用户体验界面可执行文件路径（Path of PBE League Client User Experience executable file）
-        self.tftClientPath_live: str = "C:/Riot Games/Teamfight Tactics/Live/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe" #正式服云顶客户端可执行文件路径（Path of Live TFT Client executable files）
-        self.tftClientPath_pbe: str = "C:/Riot Games/Teamfight Tactics/PBE/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe" #测试服云顶客户端可执行文件路径（Path of PBE TFT Client executable files）
-        self.locPath_rc: str = os.path.expanduser("~/AppData/Local/Riot Games/Riot Client/Config/RiotClientSettings.yaml").replace("\\", "/") #拳头客户端语言配置文件路径（Path of Riot Client language configuration file）
-        self.locPath_lol_ux_live: str = "C:/ProgramData/Riot Games/Metadata/league_of_legends.live/league_of_legends.live.product_settings.yaml" #正式服语言配置文件的路径（Path of Live League Client language configuration file）
-        self.locPath_lol_ux_pbe: str = "C:/ProgramData/Riot Games/Metadata/league_of_legends.pbe/league_of_legends.pbe.product_settings.yaml" #测试服语言配置文件的路径（Path of PBE League Client language configuration file）
-        self.locPath_tft_live: str = "C:/ProgramData/Riot Games/Metadata/teamfighttactics.live/teamfighttactics.live.product_settings.yaml"
-        self.locPath_tft_pbe: str = "C:/ProgramData/Riot Games/Metadata/teamfighttactics.pbe/teamfighttactics.pbe.product_settings.yaml"
+        self.config_path: str = config_path #配置文件路径（Path of configuration file）
+        self.config: configparser.ConfigParser = load_config(self.config_path) #配置文件对象（Configuration file object）
+        
+        paths: dict[str, str] = derive_paths(self.config)
+        self.rcPath: str = paths["rcPath"] #拳头客户端的可执行文件路径（Path of Riot Client executable）
+        self.lolUxPath_live: str = paths["lolUxPath_live"] #正式服联盟客户端用户体验界面可执行文件路径（Path of Live League Client User Experience executable file）
+        self.lolUxPath_pbe: str = paths["lolUxPath_pbe"] #测试服联盟客户端用户体验界面可执行文件路径（Path of PBE League Client User Experience executable file）
+        self.tftClientPath_live: str = paths["tftClientPath_live"] #正式服云顶客户端可执行文件路径（Path of Live TFT Client executable files）
+        self.tftClientPath_pbe: str = paths["tftClientPath_pbe"] #测试服云顶客户端可执行文件路径（Path of PBE TFT Client executable files）
+        self.locPath_rc: str = paths["locPath_rc"] #拳头客户端语言配置文件路径（Path of Riot Client language configuration file）
+        self.locPath_lol_ux_live: str = paths["locPath_lol_ux_live"] #正式服联盟客户端语言配置文件的路径（Path of Live League Client language configuration file）
+        self.locPath_lol_ux_pbe: str = paths["locPath_lol_ux_pbe"] #测试服联盟客户端语言配置文件的路径（Path of PBE League Client language configuration file）
+        self.locPath_tft_live: str = paths["locPath_tft_live"] #正式服云顶客户端语言配置文件的路径（Path of Live TFT Client language configuration file）
+        self.locPath_tft_pbe: str = paths["locPath_tft_pbe"] #测试服云顶客户端语言配置文件的路径（Path of PBE TFT Client language configuration file）
         self.paths_ready: dict[str, bool] = {"rcPath": False, "lolUxPath_live": False, "lolUxPath_pbe": False, "tftClientPath_live": False, "tftClientPath_pbe": False, "locPath_rc": False, "locPath_lol_ux_live": False, "locPath_lol_ux_pbe": False, "locPath_tft_live": False, "locPath_tft_pbe": False} #各路径是否存在（Whether each path exists）
         self.yaml: YAML = YAML() #初始化YAML读取引擎（Initialize YAML reading engine）
         self.rc_loc_data: CommentedMap = CommentedMap() #初始化拳头客户端语言配置数据（Initialize Riot Client language configuration data）
@@ -71,7 +199,7 @@ class LoLLocaleManager:
         :param preserve_quotes: 是否保留字符串两侧的双引号。默认为真。<br>Whether to reserve the double quotes enclosing a string. True by default.
         :type preserve_quotes: bool
         :param width: 单行最大字符数量。默认为4096个字符。<br>The maximum number of characters in a single line. 4096 characters by default.
-        :type width: bool
+        :type width: int
         '''
         self.yaml.indent(mapping = mapping, sequence = sequence, offset = offset)
         self.yaml.preserve_quotes = preserve_quotes
@@ -111,6 +239,8 @@ class LoLLocaleManager:
                 else:
                     self.rcPath = rcPath.replace("\\", "/")
                     self.paths_ready["rcPath"] = True
+                    self.config.set("paths", "rc_exe", self.rcPath)
+                    save_config(self.config_path, self.config)
                     break
         return self.paths_ready["rcPath"]
     
@@ -154,9 +284,12 @@ class LoLLocaleManager:
                 else:
                     if patchline == "live":
                         self.lolUxPath_live = uxPath_tmp.replace("\\", "/")
+                        self.config.set("paths", "lol_ux_live", self.lolUxPath_live)
                     else:
                         self.lolUxPath_pbe = uxPath_tmp.replace("\\", "/")
+                        self.config.set("paths", "lol_ux_pbe", self.lolUxPath_pbe)
                     self.paths_ready[uxPath_key] = True
+                    save_config(self.config_path, self.config)
                     break
         return self.paths_ready[uxPath_key]
     
@@ -200,9 +333,12 @@ class LoLLocaleManager:
                 else:
                     if patchline == "live":
                         self.tftClientPath_live = uxPath_tmp.replace("\\", "/")
+                        self.config.set("paths", "tft_exe_live", self.tftClientPath_live)
                     else:
                         self.tftClientPath_pbe = uxPath_tmp.replace("\\", "/")
+                        self.config.set("paths", "tft_exe_pbe", self.tftClientPath_pbe)
                     self.paths_ready[uxPath_key] = True
+                    save_config(self.config_path, self.config)
                     break
         return self.paths_ready[uxPath_key]
     
@@ -233,6 +369,8 @@ class LoLLocaleManager:
                 else:
                     self.locPath_rc = locPath_rc.replace("\\", "/")
                     self.paths_ready["locPath_rc"] = True
+                    self.config.set("paths", "loc_rc", self.locPath_rc)
+                    save_config(self.config_path, self.config)
                     break
         return self.paths_ready["locPath_rc"]
     
@@ -291,14 +429,19 @@ class LoLLocaleManager:
                     if product == "LoL":
                         if patchline == "live":
                             self.locPath_lol_ux_live = locPath_ux_tmp.replace("\\", "/")
+                            self.config.set("paths", "loc_lol_live", self.locPath_lol_ux_live)
                         else:
                             self.locPath_lol_ux_pbe = locPath_ux_tmp.replace("\\", "/")
+                            self.config.set("paths", "loc_lol_pbe", self.locPath_lol_ux_pbe)
                     else:
                         if patchline == "live":
                             self.locPath_tft_live = locPath_ux_tmp.replace("\\", "/")
+                            self.config.set("paths", "loc_tft_live", self.locPath_tft_live)
                         else:
                             self.locPath_tft_pbe = locPath_ux_tmp.replace("\\", "/")
+                            self.config.set("paths", "loc_tft_pbe", self.locPath_tft_pbe)
                     self.paths_ready[locPath_ux_key] = True
+                    save_config(self.config_path, self.config)
                     break
         return self.paths_ready[locPath_ux_key]
     
@@ -627,7 +770,8 @@ def change_gt_locale(localeManager: LoLLocaleManager, product: str, patchline: s
         return 2
 
 def main() -> None:
-    localeManager: LoLLocaleManager = LoLLocaleManager(args.locale, args.interval)
+    print(f"当前配置文件（Current configuration file）：\n{args.config}")
+    localeManager: LoLLocaleManager = LoLLocaleManager(args.locale, args.interval, args.config)
     localeManager.set_yaml_params()
     print("请选择您想要修改语言配置的客户端。\nPlease select the client to change language.\n1\t拳头客户端（Riot Client）\n2\t联盟客户端——正式服（League Client - Live）\n3\t联盟客户端——测试服（League Client - PBE）\n4\t云顶客户端——正式服（TFT Client - Live）\n5\t云顶客户端——测试服（TFT Client - PBE）")
     while True:
@@ -716,6 +860,7 @@ if __name__ == "__main__":
     parser: argparse.ArgumentParser = argparse.ArgumentParser(formatter_class = argparse.RawTextHelpFormatter)
     parser.add_argument("-l", "--locale", help = "拳头客户端、联盟客户端和云顶客户端的语言。\nLanguage of Riot Client, League Client and TFT Client.", action = "store", type = str, choices = AVAILABLE_LOCALES, default = "zh_CN") #本程序目前默认拳头客户端和联盟客户端采用相同语言。本程序主要面向中国大陆用户，因为其它语言可直接在拳头客户端中修改。所以默认语言为中文（中国）【This program uses the same language for Riot Client and League Client. This program is mainly oriented to Chinese Mainland users, for other languages can be directly changed in Riot Client. Therefore, the default language is Chinese (China)】
     parser.add_argument("-i", "--interval", help = "检测yaml文件变更的间隔（秒）。\nThe time interval for detecting whether the yaml file is changed, in seconds.", action = "store", type = float, default = 0.5)
+    parser.add_argument("-c", "--config", help = f"配置文件路径。默认是{DEFAULT_CONFIG_PATH}。\nPath of the configuration file. Default: {DEFAULT_CONFIG_PATH}.", action = "store", type = str, default = DEFAULT_CONFIG_PATH)
     args: argparse.Namespace = parser.parse_args()
 
     main()

@@ -24,6 +24,101 @@ For Riot Client language and TFT game text language, the program only makes the 
     - Refer to [Template: Python Installation and Global Environment Setup](https://zhuanlan.zhihu.com/p/2038292227298996375) for demonstration with pictures.
     - Before installation, please make sure "Add Python.exe to PATH" option is checked.
 2. Input `pip install ruamel.yaml` in Command Prompt to install ruamel.yaml library.
+3. Copy the following content, paste it into notepad, make some changes and save it into "lol-l10n.ini" under the user folder (`C:/Users/[User name]`).
+    ```ini
+    [paths]
+    install_dir = C:/Riot Games
+    program_data_dir = C:/ProgramData/Riot Games
+    riot_client_config_dir = C:/Users/19250/AppData/Local/Riot Games/Riot Client/Config
+    rc_exe = 
+    lol_ux_live = 
+    lol_ux_pbe = 
+    tft_exe_live = 
+    tft_exe_pbe = 
+    loc_rc = 
+    loc_lol_live = 
+    loc_lol_pbe = 
+    loc_tft_live = 
+    loc_tft_pbe = 
+    ```
+
+The following table illustrates the meaning of each path and how users should write these paths.
+<table>
+    <thead>
+        <tr>
+            <th style="text-align:center;">Parameter Name</th>
+            <th style="text-align:center;">Meaning</th>
+            <th style="text-align:center;">Default User Operation</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="text-align:center;">install_dir</td>
+            <td>The installation directory of Riot games.</td>
+            <td>The user needs to change it.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">program_data_dir</td>
+            <td>Program data directory.</td>
+            <td>Basically the user doesn't need to change it.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">riot_client_config_dir</td>
+            <td>Riot Client config directory.</td>
+            <td>The user needs to change the user name part.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">rc_exe</td>
+            <td>Riot Client executable path.</td>
+            <td>Leave it empty. It's automatically generated according to `install_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">lol_ux_live</td>
+            <td>Live League Client User Experience executable file path.</td>
+            <td>Leave it empty. It's automatically generated according to `install_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">lol_ux_pbe</td>
+            <td>PBE League Client User Experience executable file path.</td>
+            <td>Leave it empty. It's automatically generated according to `install_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">tft_exe_live</td>
+            <td>Live TFT Client executable path.</td>
+            <td>Leave it empty. It's automatically generated according to `install_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">tft_exe_pbe</td>
+            <td>PBE TFT Client executable path.</td>
+            <td>Leave it empty. It's automatically generated according to `install_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_rc</td>
+            <td>Riot Client language configuration file path.</td>
+            <td>Leave it empty. It's automatically generated according to `riot_client_config_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_lol_live</td>
+            <td>Live League Client language configuration file path.</td>
+            <td>Leave it empty. It's automatically generated according to `program_data_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_lol_pbe</td>
+            <td>PBE League Client language configuration file path.</td>
+            <td>Leave it empty. It's automatically generated according to `program_data_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_tft_live</td>
+            <td>Live TFT Client language configuration file path.</td>
+            <td>Leave it empty. It's automatically generated according to `program_data_dir`.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">loc_tft_pbe</td>
+            <td>PBE TFT Client language configuration file path.</td>
+            <td>Leave it empty. It's automatically generated according to `program_data_dir`.</td>
+        </tr>
+    </tbody>
+<table>
 
 ## User Manual
 Please run this program **as Administrator**. Two methods are provided below:
@@ -33,7 +128,9 @@ Please run this program **as Administrator**. Two methods are provided below:
     3. Use the `cd` command to navigate to the repository directory.
         - For example, the path of my repository is `C:\Users\19250\Documents\GitHub\League-Localization`. Then I should enter `cd "C:\Users\19250\Documents\GitHub\League-Localization"`.
     4. Input `python 汉化联盟客户端.py`。
-        - Target language can be specified by `-l` parameter. Refer to the following "Paramater Notes" section to see all parameters.
+        - Target language can be specified by `-l` parameter.
+        - Config file can be specified by `-c` parameter.
+        - Refer to the following "Paramater Notes" section to see all parameters.
 2. Create a shortcut that run as administrator on desktop. Then, simply double-click this shortcut to run the program.
     1. Open Command Prompt and enter `where python`.
         - If you don't get any output, please visit [Python official website](https://www.python.org) to download and install Python first.
@@ -71,12 +168,17 @@ After launching the program, the user may perform the following operations:
         <tr>
             <td style="text-align:center;">-l</td>
             <td style="text-align:center;">--locale</td>
-            <td>Game language.<br>Access <a href="https://developer.riotgames.com/docs/lol#data-dragon_regions">Riot Developer Portal</a>to check the list of all supported languages.</td>
+            <td>Game language.<br>Access <a href="https://developer.riotgames.com/docs/lol#data-dragon_regions">Riot Developer Portal</a> to check the list of all supported languages.</td>
         </tr>
         <tr>
             <td style="text-align:center;">-i</td>
             <td style="text-align:center;">--interval</td>
             <td>Detection interval. 0.5 seconds by default, meaning the language configuration file is corrected every 0.5 seconds.</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;">-c</td>
+            <td style="text-align:center;">--config</td>
+            <td>Path of the config file for this program. Default: "lol-i10n.ini" under the user folder.</td>
         </tr>
     </tbody>
 <table>
