@@ -288,10 +288,16 @@ class LoLLocaleManager:
                 elif not os.path.basename(locPath_ux_tmp) == f"{product_name}.{patchline}.product_settings.yaml":
                     print(f"请输入{patchline_loc_zh}{client_loc_zh}的语言配置文件路径。\nPlease input a path of {patchline_loc_en} {client_loc_en} language configuration file.")
                 else:
-                    if patchline == "live":
-                        self.locPath_lol_ux_live = locPath_ux_tmp.replace("\\", "/")
+                    if product == "LoL":
+                        if patchline == "live":
+                            self.locPath_lol_ux_live = locPath_ux_tmp.replace("\\", "/")
+                        else:
+                            self.locPath_lol_ux_pbe = locPath_ux_tmp.replace("\\", "/")
                     else:
-                        self.locPath_lol_ux_pbe = locPath_ux_tmp.replace("\\", "/")
+                        if patchline == "live":
+                            self.locPath_tft_live = locPath_ux_tmp.replace("\\", "/")
+                        else:
+                            self.locPath_tft_pbe = locPath_ux_tmp.replace("\\", "/")
                     self.paths_ready[locPath_ux_key] = True
                     break
         return self.paths_ready[locPath_ux_key]
