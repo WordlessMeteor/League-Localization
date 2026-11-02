@@ -2,7 +2,7 @@
 
 [中文用户？点击此处查看中文介绍。](README.zh_CN.md)
 
-This repository is designed to **steadily** change the language of League of Legends and Teamfight Tactics clients. It supports "Chinese (China)" option. "Steadily" means the program ensures the language is always the target language during the process of downloading game files.
+This repository is designed to **steadily** change the language of League of Legends and Teamfight Tactics clients **released by Riot**. It supports "Chinese (China)" option. By "steadily", it means <ins>the program ensures the language is always the target language during the process of downloading game files</ins>.
 
 League Localization Program supports changing the following language configuration: (Which corresponds to settings in Riot Client.)
 - RIOT CLIENT
@@ -187,4 +187,4 @@ After launching the program, the user may perform the following operations:
 1. Please ensure no other localization programs are running, e.g. localization function of some accelerators.
 2. You must Run this program **As Adminstrator** to make sure the program has the permission to modify the corresponding language configuration files.
 3. You must change the language **before running clients** to make sure language changes are sent to server in time.
-4. When you sign out League Client and switch to another account (e.g. from PBE to Live or between different regions), sometimes a case happens: after game files in target language are downloaded completely, pressing "Play" button will cause the language configuration to be restored to the default language, despite the running localization program. This causes all of the downloaded game files in target language to be deleted and the client will download game files in default language, and you need to download game files in target language again afterwards. Worse still, this loop may persist. **If you encounter such a situation, please exit Riot Client, then launch the correct product and try again.**
+4. When you sign out of League Client and switch to another account (e.g. from PBE to Live or between different regions), sometimes a case happens: after game files in target language are downloaded completely, pressing "Play" button will cause the language configuration to be restored to the default language, despite the running localization program. This causes all of the downloaded game files in target language to be deleted and the client will download game files in default language, and you need to download game files in target language again afterwards. Worse still, this loop may persist. **If you encounter such a situation, please exit Riot Client, then launch the correct product and try again.**
