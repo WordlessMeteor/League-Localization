@@ -139,7 +139,7 @@ def derive_paths(cfg: configparser.ConfigParser) -> dict[str, str]:
     } #存储语言管理器中的路径属性成员的名称和配置文件中的键名的映射关系（Store the mapping between the names of path attributes in the locale manager and the key names in the configuration file）
     for attr, key in override_map.items():
         v: str = cfg.get("paths", key, fallback = "").strip()
-        if bool(v):
+        if bool(v): #如果配置中单独指定过个别文件的位置，则使用该位置（If some specific file has unqiue location in the config, use this location）
             derived[attr] = norm_path(v)
     return derived
 
@@ -527,12 +527,25 @@ class LoLLocaleManager:
         :param interval: 循环修改模式下检测yaml文件变更的间隔（单位：秒）。默认为0.5秒。<br>The time interval to detect whether the yaml file is changed under Loop Edit Mode, in seconds. 0.5 seconds by default.
         :type interval: float
         '''
-        #可设置的属性（Configurable members）
+        #可设置的属性（Configurable attributes）
         self.locale: str = locale #目标语言文化代码（Target language code）
         self.interval: float = interval #循环修改时的读取间隔（Time interval between two reads in Loop Edit mode）
         self.config_path: str = config_path #配置文件路径（Path of configuration file）
+        #其它公开属性（Other public attributes）
+        self.paths_ready: dict[str, bool] = {"rcPath": False, "lolUxPath_live": False, "lolUxPath_pbe": False, "tftClientPath_live": False, "tftClientPath_pbe": False, "locPath_rc": False, "locPath_lol_ux_live": False, "locPath_lol_ux_pbe": False, "locPath_tft_live": False, "locPath_tft_pbe": False} #各路径是否存在（Whether each path exists）
+        #私密属性（Private attributes）
+        self._yaml: YAML = YAML() #初始化YAML读取引擎（Initialize YAML reading engine）
         #自动生成的属性（Automatically generated attributes）
+        self.init_config_data()
+        self.init_loc_data()
+    
+    def init_config_data(self) -> None:
+        '''
+        初始化程序配置数据。<br>Initialize program configuration data.
+        '''
         self.config: configparser.ConfigParser = load_config(self.config_path) #配置文件对象（Configuration file object）
+        if not self.verify_config(self.config):
+            raise TypeError("Invalid program config data. Please check the format.")
         paths: dict[str, str] = derive_paths(self.config)
         self.rcPath: str = paths["rcPath"] #拳头客户端的可执行文件路径（Path of Riot Client executable）
         self.lolUxPath_live: str = paths["lolUxPath_live"] #正式服联盟客户端用户体验界面可执行文件路径（Path of Live League Client User Experience executable file）
@@ -544,19 +557,26 @@ class LoLLocaleManager:
         self.locPath_lol_ux_pbe: str = paths["locPath_lol_ux_pbe"] #测试服联盟客户端语言配置文件的路径（Path of PBE League Client language configuration file）
         self.locPath_tft_live: str = paths["locPath_tft_live"] #正式服云顶客户端语言配置文件的路径（Path of Live TFT Client language configuration file）
         self.locPath_tft_pbe: str = paths["locPath_tft_pbe"] #测试服云顶客户端语言配置文件的路径（Path of PBE TFT Client language configuration file）
-        self.paths_ready: dict[str, bool] = {"rcPath": False, "lolUxPath_live": False, "lolUxPath_pbe": False, "tftClientPath_live": False, "tftClientPath_pbe": False, "locPath_rc": False, "locPath_lol_ux_live": False, "locPath_lol_ux_pbe": False, "locPath_tft_live": False, "locPath_tft_pbe": False} #各路径是否存在（Whether each path exists）
-        self.yaml: YAML = YAML() #初始化YAML读取引擎（Initialize YAML reading engine）
-        self.rc_loc_data: CommentedMap = CommentedMap() #初始化拳头客户端语言配置数据（Initialize Riot Client language configuration data）
-        self.gt_loc_data: CommentedMap = CommentedMap() #初始化游戏文本语言配置数据（Initialize game text language configuration data）
-        self.error_count: int = 0 #错误次数（Number of errors）
     
     def init_loc_data(self) -> None:
         '''
         初始化语言配置数据。<br>Initialize language configuration data.
         '''
-        self.rc_loc_data = CommentedMap()
-        self.gt_loc_data = CommentedMap()
-        self.error_count = 0
+        self.rc_loc_data: CommentedMap = CommentedMap() #初始化拳头客户端语言配置数据（Initialize Riot Client language configuration data）
+        self.gt_loc_data: CommentedMap = CommentedMap() #初始化游戏文本语言配置数据（Initialize game text language configuration data）
+        self.error_count: int = 0 #错误次数（Number of errors）
+    
+    @staticmethod
+    def verify_config(cfg: configparser.ConfigParser) -> bool:
+        '''
+        检验程序配置是否正确。<br>Verify whether the program config is correct.
+        
+        :param cfg: 待检验的程序配置。<br>A program config to verify.
+        :type cfg: configparser.ConfigParser
+        :return: 程序配置格式的正确性。<br>Correctness of the program config format.
+        :rtype: bool
+        '''
+        return isinstance(cfg, configparser.ConfigParser) and cfg.has_section("paths") and cfg.has_option("paths", "install_dir") and cfg.has_option("paths", "program_data_dir") and cfg.has_option("paths", "riot_client_config_dir")
     
     def set_locale(self, locale: Optional[int | str] = None) -> None:
         '''
@@ -567,16 +587,18 @@ class LoLLocaleManager:
             编号可通过本类的`LANGUAGE_DICT`常量查询。<br>The number can be accessed by `LANGUAGE_DICT` constant of this class.
         :type locale: int | str
         '''
-        useParam: bool = locale is not None
-        if useParam:
+        useParam: bool = False
+        if locale is not None:
             if isinstance(locale, int):
                 if locale > 1 and locale <= len(self.LANGUAGE_DDRAGON):
                     self.locale = list(self.LANGUAGE_DDRAGON.keys())[locale - 1]
+                    useParam = True
                 else:
                     print("下标越界。将转为手动输入。\nIndex out of bounds. You'll be asked to manually input it.")
             else:
                 if locale in self.LANGUAGE_DDRAGON:
                     self.locale = locale
+                    useParam = True
                 else:
                     print("语言文化代码无效。将转为手动输入。\nInvalid language code. You'll be asked to manually input it.")
         if not useParam:
@@ -629,17 +651,24 @@ class LoLLocaleManager:
                 self.interval = new_interval
                 print(f"循环间隔已设置为{new_interval}秒。\nLoop interval has been set to {new_interval} seconds.")
 
-    def set_config_path(self, config_path: Optional[str] = None) -> None:
+    def set_config(self, config_path: Optional[str] = None) -> None:
         '''
         设置配置文件路径。<br>Set the config file path.
         
         :param config_path: 通过方法的参数传入的配置文件路径。如果不指定，则在方法内部询问。<br>The config file path passed through the method parameter. If it's not specified, the method will ask the user to specify it.
         :type config_path: str
         '''
-        useParam: bool = config_path is not None
-        if useParam:
-            self.config_path = config_path
-        else:
+        useParam: bool = False
+        if config_path is not None:
+            try:
+                load_config(config_path)
+            except:
+                print("读取配置文件的过程出现了一个异常。将转为手动输入。\nAn error occurred during the process of reading the config file. You'll be asked to manually input it.")
+            else:
+                self.config_path = config_path
+                self.init_config_data()
+                useParam = True
+        if not useParam:
             print('请输入配置文件路径：（输入“0”以取消更改。）\nPlease input the path of the config file: (Submit "0" to cancel the change.)\n当前配置文件（Current config file）： ' + self.config_path)
             while True:
                 path: str = input()
@@ -653,8 +682,17 @@ class LoLLocaleManager:
                     elif not os.path.isfile(path):
                         print("请输入一个文件。\nPlease input a file.")
                     else:
-                        self.config_path = path #接下来将围绕此部分展开校验（A verification will be added to this part）
-                        break
+                        try:
+                            load_config(path)
+                        except:
+                            print("读取配置文件的过程出现了一个异常。请切换文件后再试。\nAn error occurred during the process of reading the config file. Please change another file and try again.")
+                        else:
+                            self.config_path = path
+                            self.init_config_data()
+                            if self.verify_config(self.config):
+                                break
+                            else:
+                                print("配置文件格式有误。请调整后再试一次。\nInvalid config file format. Please adjust it and try again.")
     
     #定义YAML引擎参数调整方法（Define a YAML engine parameter adjustment method）
     def set_yaml_params(self, mapping: int = 4, sequence: int = 4, offset: int = 2, preserve_quotes: bool = True, width: int = 4096) -> None:
@@ -672,15 +710,15 @@ class LoLLocaleManager:
         :param width: 单行最大字符数量。默认为4096个字符。<br>The maximum number of characters in a single line. 4096 characters by default.
         :type width: int
         '''
-        self.yaml.indent(mapping = mapping, sequence = sequence, offset = offset)
-        self.yaml.preserve_quotes = preserve_quotes
-        self.yaml.width = width
+        self._yaml.indent(mapping = mapping, sequence = sequence, offset = offset)
+        self._yaml.preserve_quotes = preserve_quotes
+        self._yaml.width = width
         def represent_none(self: RoundTripRepresenter, data: None) -> ScalarNode:
             '''
             YAML引擎的空值处理策略。<br>Empty value handling strategy of YAML engine.
             '''
             return self.represent_scalar("tag:yaml.org,2002:null", "null")
-        self.yaml.representer.add_representer(type(None), represent_none)
+        self._yaml.representer.add_representer(type(None), represent_none)
     
     #定义参数检查方法族（Define member checking method family）
     def check_rcPath(self) -> bool:
@@ -985,7 +1023,7 @@ class LoLLocaleManager:
         '''
         try:
             with open(self.locPath_rc, "r", encoding = "utf-8") as fp:
-                self.rc_loc_data: CommentedMap = self.yaml.load(fp)
+                self.rc_loc_data: CommentedMap = self._yaml.load(fp)
         except PermissionError:
             self.error_count += 1
             print(f"[{self.error_count}]拒绝访问。 | Access Denied.")
@@ -1022,7 +1060,7 @@ class LoLLocaleManager:
         #函数主体（Function body）
         try:
             with open(locPath_gt, "r", encoding = "utf-8") as fp:
-                self.gt_loc_data: CommentedMap = self.yaml.load(fp)
+                self.gt_loc_data: CommentedMap = self._yaml.load(fp)
         except FileNotFoundError: #在更新客户端的过程，可能会有一段短暂的时间，这个文件被删除（While the client is being updated, there might be short period of time when this file is deleted）
             self.error_count += 1
             print(f"[{self.error_count}]文件被删除。 | File deleted.")
@@ -1090,7 +1128,7 @@ class LoLLocaleManager:
         '''
         try:
             with open(self.locPath_rc, "w", encoding = "utf-8") as fp:
-                self.yaml.dump(self.rc_loc_data, fp)
+                self._yaml.dump(self.rc_loc_data, fp)
         except PermissionError:
             self.error_count += 1
             print(f"[{self.error_count}]拒绝访问。 | Access Denied.")
@@ -1127,7 +1165,7 @@ class LoLLocaleManager:
         #函数主体（Function body）
         try:
             with open(locPath_gt, "w", encoding = "utf-8") as fp:
-                self.yaml.dump(self.gt_loc_data, fp)
+                self._yaml.dump(self.gt_loc_data, fp)
         except PermissionError:
             self.error_count += 1
             print(f"[{self.error_count}]拒绝访问。 | Access Denied.")
@@ -1251,7 +1289,7 @@ def main() -> None:
         if option == "":
             continue
         elif option == "-1":
-            print("请选择一个设置项：\nPlease select a settings option:\n0\t返回上一层（Return to the last step）\n1\t目标语言（Target language）\n2\t循环间隔（Loop interval）")
+            print("请选择一个设置项：\nPlease select a settings option:\n0\t返回上一层（Return to the last step）\n1\t目标语言（Target language）\n2\t循环间隔（Loop interval）\n3\t切换程序配置文件（Switch program config file）")
             while True:
                 settings_option: str = input()
                 if settings_option == "":
@@ -1262,10 +1300,12 @@ def main() -> None:
                     localeManager.set_locale()
                 elif settings_option[0] == "2":
                     localeManager.set_interval()
+                elif settings_option[0] == "3":
+                    localeManager.set_config()
                 else:
                     print("您的输入有误！请重新输入。\nERROR input. Please try again.")
                     continue
-                print("请选择一个设置项：\nPlease select a settings option:\n0\t返回上一层（Return to the last step）\n1\t目标语言（Target language）\n2\t循环间隔（Loop interval）")
+                print("请选择一个设置项：\nPlease select a settings option:\n0\t返回上一层（Return to the last step）\n1\t目标语言（Target language）\n2\t循环间隔（Loop interval）\n3\t切换程序配置文件（Switch program config file）")
         elif option[0] == "0":
             break
         elif option[0] == "1":
