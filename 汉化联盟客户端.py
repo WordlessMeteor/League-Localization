@@ -1,7 +1,8 @@
-import argparse, configparser, msvcrt, os, psutil, time
+import argparse, configparser, msvcrt, os, psutil, time, unicodedata
+from wcwidth import wcswidth
 from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString #使得列表元素强制使用双引号【Force to use double quotes for an element in a list (CommentedSeq)】
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.representer import RoundTripRepresenter
 from ruamel.yaml.nodes import ScalarNode
@@ -142,10 +143,381 @@ def derive_paths(cfg: configparser.ConfigParser) -> dict[str, str]:
             derived[attr] = norm_path(v)
     return derived
 
+#定义用于排版的函数和变量（Define functions and variables for layout optimization）——其实仅用于语言选项的格式化输出（Actually they're only used for formatted output of language options）
+def count_nonASCII(s: str) -> int:
+    '''
+    统计一个字符串中占用命令行2个宽度单位的字符个数。<br>Count the number of characters that take up 2 width unit in CMD.
+    
+    :param s: 任意字符串。<br>Any string.
+    :type s: str
+    :return: 占用2个宽度单位的字符个数。<br>The number of characters that take up 2 width.
+    :rtype: int
+    '''
+    return sum([unicodedata.east_asian_width(character) in ("F", "W") for character in list(str(s))])
+
+def rm_ctrl_char(s: str) -> str:
+    '''
+    移除一个字符串中的所有C0和C1字符。<br>Remove all C0 and C1 characters from a string.
+    
+    :param s: 原字符串。<br>The original string.
+    :type s: str
+    :return: 移除终端中显示异常的字符后的字符串。<br>The result string after removing characters that don't display correctly in terminal.
+    :rtype: str
+    '''
+    return "".join(ch for ch in s if unicodedata.category(ch) != "Cc") #该表达式等价于（This expression is equivalent to）`re.sub(r"[\x00-\x1F\x7F-\x9F]", "", s)`
+
+def format_dt(dt: dict[str, list[Any]], print_header: bool = True, print_index: bool = False, start_index: int = 0, header_align: str = "^", align: str = "^", align_replicate_rule: Literal["all", "last"] = "all") -> tuple[str, dict[str, int]]: #按照每列最长字符串的命令行宽度加上2，再根据每个数据的中文字符数量决定最终格式化输出的字符串宽度（Get the width of the longest string of each column, add it by 2, and substract it by the number of each cell string's Chinese characters to get the final width for each cell to print using `format` function）
+    '''
+    将适用于构建数据框的一个字典转化为列对齐的字符串，用于排版输出。<br>Transform a dictionary into a string where columns are aligned for better page layout.
+
+    :param dt: 要排版的数据字典。<br>A dictionary to transform into a layout-organized string.
+    :type dt: dict[str, list[Any]]
+    :param print_header: 是否打印表头。默认为真。<br>Whether to print the header. True by default.
+    :type print_header: bool
+    :param print_index: 是否打印索引列。默认为假。<br>Whether to print the index column. False by default.
+    :type print_index: bool
+    :param reserve_index: 在打印索引列时，是否输出原始索引。指定为真时则输出原始索引，否则输出从start_index到start_index + len(df) - 1的索引。<br>Whether to print the original indices, when the index column is going to be printed. If it's True, then print the original indices; otherwise, print the index from `start_index` to `start_index + len(df) - 1`.
+    :type reserve_index: bool
+    :param start_index: 在输出处理后的索引时的起始索引。仅当打印索引列但不输出原始索引时可用。默认值为0。<br>The starting index when the function prints the processed indices. Available only when the index column is going to be printed but not the original indices. Default value is 0.
+    :type start_index: int
+    :param header_align: 表头对齐方式。可取“<”“^”和“>”三个字符的任意组合。<br>The alignment method of headers, which may be composed of any number of any character among "<", "^" and ">".
+        <pre>
+        **value**       **description**<br>
+        &nbsp;<       左对齐（Left-aligned）<br>
+        &nbsp;^       居中对齐（Centered）<br>
+        &nbsp;>       右对齐（Right-aligned）
+        </pre>
+    :type header_align: str
+    :param align: 单元格对齐方式。取值规则同header_align参数。<br>The alignment method of cells, whose possible values are the same as those of `header_align` parameter.
+    :type align: str
+    :param align_replicate_rule: 当表头对齐方式参数和单元格对齐方式参数字符串长度小于列数时，对齐方式的填充规则。共有“all”和“last”两种取值。<br>The rule of filling the aligment method when the alignment method string of headers or cells is less than the number of columns. There're two possible values for this parameter: "all" and "last".
+    
+        - all: 将整个对齐方式规则循环往复地填充至剩余列。<br>Recursively fill the whole set of alignment methods in the rest of columns.<br>【例】在仅指定前三列单元格的对齐方式分别是左对齐、居中对齐和右对齐的情况下，第四至六列单元格的对齐方式将依次是左对齐、居中对齐和右对齐，往复。<br>[Example] When only the first three columns of cells are specified left-aligned, centered and right-aligned, respectively, the fourth to sixth columns of cells shall be left-aligned, centered and right-aligned, respectively, and so on.
+        - last: 将最后一个被指定对齐方式的列的对齐方式填充至剩余列。<br>Fill the alignment method of the last one of the columns specified with alignment methods in the rest of columns.<br>【例】在仅指定前三列单元格的对齐方式分别是左对齐、居中对齐和右对齐的情况下，后面所有列的对齐方式将都是右对齐。<br>[Example] When only the first three columns of cells are specified left-aligned, centered and right-aligned, respectively, all of the subsequent columns of cells shall be right-aligned.
+    :type align_replicate_rule: str
+    :return: 由格式化字符串和各列宽度字典组成的元组。<br>A tuple composed of the formatted string and each column's width dictionary.
+    :rtype: tuple[str, dict[str, str]]
+    '''
+    #参数预处理（Parameter preprocessing）
+    if not (isinstance(dt, dict) and all(map(lambda x: isinstance(x, list), dt.values()))):
+        print("数据字典参数错误！请传入一个字典，且字典的值必须是列表。\nParameter ERROR of the data dictionary! Please pass a dictionary whose values are all lists.")
+        return ("", {})
+    #准备一些常量（Prepare some constants）
+    shape: tuple[int, int] = (max(map(len, dt.values())), len(dt)) #表格的行列数（The number of the table's rows and columns）
+    dt_index: list[int] = list(range(start_index, shape[0] + start_index)) #新索引允许从`start_index`开始，默认从0开始（New indices allow starting from `start_index`, which is 0 by default）
+    index_len: int = 0 if shape[0] == 0 else max(map(lambda x: len(str(x)), dt_index)) #计算索引列的最大字符串宽度（Calculate the max string length of the index column）
+    fields: list[str] = list(dt.keys())
+    maxLens: dict[str, int] = {} #存储不同列的最大字符串宽度（Stores the max string lengths of different columns）
+    for field in fields: #计算每一列的最大字符串宽度（Calculate the max string length of each column）
+        maxLens[field] = max(0 if shape[0] == 0 else max(map(lambda x: wcswidth(rm_ctrl_char(str(x))), dt[field])), wcswidth(rm_ctrl_char(str(field)))) + 2
+    #确定各列的排列方向（Determine the alignments of all columns）
+    if not (isinstance(header_align, str) and isinstance(align, str)): #确保排列方向参数无误（Ensure the alignment parameters are valid）
+        print("排列方式参数错误！请传入字符串。\nAlignment parameter ERROR! Please pass a string instead.")
+        return ("", maxLens)
+    if not all(map(lambda x: x in {"<", "^", ">"}, header_align)) or not all(map(lambda x: x in {"<", "^", ">"}, align)):
+        print('排列方式字符串参数错误！排列方式必须是“<”“^”或者“>”中的一个。请修改排列方式字符串参数。\nParameter ERROR of the alignment string! The alignment value must be one of {"<", "^", ">"}. Please change the alignment string parameter.')
+        return ("", maxLens)
+    if len(header_align) == 0: #指定为空字符串，即默认居中输出（Specifying it as a null string means output centered by default）
+        header_alignments: list[str] = ["^"] * shape[1]
+    elif len(header_align) == 1:
+        header_alignments = [header_align] * shape[1]
+    else:
+        header_alignments_tmp = list(header_align)
+        if len(header_align) < shape[1]: #表头排列规则字符串长度小于数据框列数时，通过排列方式列表补充规则进行补充（When the length of `header_align` is less than the number of the dataframe's columns, supplement the rest of the rules according to `align_replicate_rule`）
+            if align_replicate_rule == "last": #仅重复最后一列的排列方式（Only replicate the alignment of the last column）
+                header_alignments = header_alignments_tmp + [header_alignments_tmp[-1]] * (shape[1] - len(header_align))
+            else:
+                if align_replicate_rule != "all":
+                    print("排列方式列表补充规则不合法！将默认采用全部填充。\nAlignment list supplement rule illegal! The whole alignment string will be replicated.")
+                header_alignments = header_alignments_tmp * (shape[1] // len(header_align)) + header_alignments_tmp[:shape[1] % len(header_align)] #所有排列方式循环补充（Supplement the alignments in a cycle of the whole `header_alignment` string）
+        else: #表头排列规则字符串大于等于数据框列数时，取长度等于数据框列数的字符串开头切片（When the length of `header_align` is greater than or equal to the number of the dataframe's columns, get the slice at the beginning of `header_align` whose length equal to the number of the dataframe's columns）
+            header_alignments = header_alignments_tmp[:shape[1]]
+    if len(align) == 0: #指定为空字符串，即默认居中输出（Specifying it as a null string means output centered by default）
+        alignments: list[str] = ["^"] * shape[1]
+    elif len(align) == 1:
+        alignments = [align] * shape[1]
+    else:
+        alignments_tmp: list[str] = list(align)
+        if len(align) < shape[1]: #数据排列规则字符串长度小于数据框列数时，通过排列方式列表补充规则进行补充（When the length of `align` is less than the number of the dataframe's columns, supplement the rest of the rules according to `align_replicate_rule`）
+            if align_replicate_rule == "last": #仅重复最后一列的排列方式（Only replicate the alignment of the last column）
+                alignments = alignments_tmp + [alignments_tmp[-1]] * (shape[1] - len(align))
+            else:
+                if align_replicate_rule != "all":
+                    print("排列方式列表补充规则不合法！将默认采用全部填充。\nAlignment list supplement rule illegal! The whole alignment string will be replicated.")
+                alignments = alignments_tmp * (shape[1] // len(align)) + alignments_tmp[:shape[1] % len(align)]
+        else: #数据排列规则字符串大于等于数据框列数时，取长度等于数据框列数的字符串开头切片（When the length of `align` is greater than or equal to the number of the dataframe's columns, get the slice at the beginning of `header_align` whose length equal to the number of the dataframe's columns）
+            alignments = alignments_tmp[:shape[1]]
+    #生成结果字符串（Generate the result string）
+    result: str = "" #结果字符串初始化（Initialize the result string）
+    if print_header: #打印表头（Prints the header）
+        if print_index: #打印表头时，如果输出索引，由于表头没有索引，所以用空格代替（Spaces will be printed as the index part of the header）
+            result += " " * (index_len + 2)
+        for i in range(shape[1]):
+            field: str = fields[i]
+            tmp: str = "{0:{align}{w}}".format(rm_ctrl_char(str(field)), align = header_alignments[i], w = maxLens[field] - count_nonASCII(field))
+            result += tmp
+            #print(tmp, end = "")
+            if i != shape[1] - 1: #未到行尾时，用两个空格来分割该列和下一列（When the program doesn't reach the end of the line, separate this column and the next column by two spaces）
+                result += "  "
+                #print("  ", end = "")
+        result += "\n"
+        #print()
+    index: int = start_index
+    for i in range(shape[0]):
+        if print_index:
+            result += "{0:>{w}}".format(index, w = index_len) + "  "
+        for j in range(shape[1]):
+            field = fields[j]
+            cell: str = str(dt[field][i])
+            tmp = "{0:{align}{w}}".format(rm_ctrl_char(cell), align = alignments[j], w = maxLens[field] - count_nonASCII(cell))
+            result += tmp
+            #print(tmp, end = "")
+            if j != shape[1] - 1: #未到行尾时，用两个空格来分割该列和下一列（When the program doesn't reach the end of the line, separate this column and the next column by two spaces）
+                result += "  "
+                #print("  ", end = "")
+        if i != shape[0] - 1:
+            result += "\n"
+        #print() #注意这里的缩进和上一行不同（Note that here the indentation is different from the above line）
+        index += 1
+    return (result, maxLens)
+
+#定义按键检测函数（Define the key press detection function）
 def isKeyPressed(keyCode1: bytes, keyCode2: bytes = b"") -> bool:
+    r'''
+    检查指定的按键是否在用户**激活当前程序的运行窗口/标签页**时被按下。<br>Check if the specified key is pressed when the user **activates the tab / window of the current program**.
+    
+    对于简单按键，用户只需要传入第一个字节序列。对于特殊按键，用户需要传入两个不同的字节序列。这是因为`msvcrt.getch`函数一次只能返回一个字节的数据。简单按键的字节数较小，用一个字节便可存下；特殊按键的字节序列较大，需要用两个字节来表示。<br>For a simple key, the user only needs to pass in the first byte sequence. For a special key, the user needs to pass in two different byte sequences. This is because `msvcrt.getch` function can only return one byte of data at a time. The byte sequence of simple keys is smaller and can be stored in one byte; the byte sequence of special keys is larger and requires two bytes.
+    
+    简单按键的字节序列就是直接以字节形式表示的按键本身，例如：<br>The byte sequence of a simple key is the key itself in byte form, for example:
+    - A: (b"a")
+    - Space: (b" ")
+    
+    一些特殊按键的字节序列如下：<br>Some special key byte sequences are as follows:
+    - Backspace: (b"\x08")
+    - Enter: (b"\r")
+    - Esc: (b"\x1b")
+    - F1: (b"\x00", b";")
+    - F2: (b"\x00", b"<")
+    - F3: (b"\x00", b"=")
+    - F4: (b"\x00", b">")
+    - F5: (b"\x00", b"?")
+    - F6: (b"\x00", b"@")
+    - F7: (b"\x00", b"A")
+    - F8: (b"\x00", b"B")
+    - F9: (b"\x00", b"C")
+    - F10: (b"\x00", b"D")
+    - F11: (b"\x00", b"\x85")
+    - F12: (b"\x00", b"\x86")
+    - Insert: (b"\xe0", b"R")
+    - Delete: (b"\xe0", b"S")
+    - Home: (b"\xe0", b"H")
+    - End: (b"\xe0", b"P")
+    - Page Up: (b"\xe0", b"I")
+    - Page Down: (b"\xe0", b"Q")
+        
+    :param keyCode1: 一个按键对应的第一个字节序列。<br>The first byte sequence of a key.
+    :type keyCode1: bytes
+    :param keyCode2: 一个按键对应的第二个字节序列。默认是空字节。<br>The second byte sequence of a key. An empty byte by default.
+    
+        对于简单按键，这个参数不发挥作用。<br>For a simple key, this parameter doesn't make any difference.
+    :type keyCode2: bytes
+    :return: 指定的按键是否被按下。<br>Whether the specified key is pressed.
+    :rtype: bool
+    '''
     return bool(msvcrt.kbhit()) and msvcrt.getch() == keyCode1 and (keyCode1 != b"\xe0" and keyCode1 != b"\000" or msvcrt.getch() == keyCode2)
 
+#定义语言管理相关类和过程（Define language management related class and processes）
 class LoLLocaleManager:
+    #定义语言设置相关常量（Define language settings related constants）
+    LANGUAGE_DDRAGON: dict[str, dict[str, str]] = {
+        "ar_AE": {
+            "desc_en": "Arabic (United Arab Emirates)",
+            "desc_zh": "阿拉伯语（阿拉伯联合酋长国）",
+            "desc_local": "العربية (الإمارات العربية المتحدة)",
+            "Available CDragon Data Patches": "9.20～10.1, 13.20+"
+        },
+        "cs_CZ": {
+            "desc_en": "Czech (Czech Republic)",
+            "desc_zh": "捷克语（捷克共和国）",
+            "desc_local": "Čeština (Česká republika)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "el_GR": {
+            "desc_en": "Greek (Greece)",
+            "desc_zh": "希腊语（希腊）",
+            "desc_local": "Ελληνικά (Ελλάδα)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "pl_PL": {
+            "desc_en": "Polish (Poland)",
+            "desc_zh": "波兰语（波兰）",
+            "desc_local": "Polski (Polska)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "ro_RO": {
+            "desc_en": "Romanian (Romania)",
+            "desc_zh": "罗马尼亚语（罗马尼亚）",
+            "desc_local": "Română (România)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "hu_HU": {
+            "desc_en": "Hungarian (Hungary)",
+            "desc_zh": "匈牙利语（匈牙利）",
+            "desc_local": "Magyar (Magyarország)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "en_GB": {
+            "desc_en": "English (United Kingdom)",
+            "desc_zh": "英语（英国）",
+            "desc_local": "English (United Kingdom)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "de_DE": {
+            "desc_en": "German (Germany)",
+            "desc_zh": "德语（德国）",
+            "desc_local": "Deutsch (Deutschland)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "es_ES": {
+            "desc_en": "Spanish (Spain)",
+            "desc_zh": "西班牙语（西班牙）",
+            "desc_local": "Español (España)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "it_IT": {
+            "desc_en": "Italian (Italy)",
+            "desc_zh": "意大利语（意大利）",
+            "desc_local": "Italiano (Italia)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "fr_FR": {
+            "desc_en": "French (France)",
+            "desc_zh": "法语（法国）",
+            "desc_local": "Français (France)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "ja_JP": {
+            "desc_en": "Japanese (Japan)",
+            "desc_zh": "日语（日本）",
+            "desc_local": "日本語 (日本)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "ko_KR": {
+            "desc_en": "Korean (Korea)",
+            "desc_zh": "朝鲜语（韩国）",
+            "desc_local": "한국어 (대한민국)",
+            "Available CDragon Data Patches": "9.7+"
+        },
+        "es_MX": {
+            "desc_en": "Spanish (Mexico)",
+            "desc_zh": "西班牙语（墨西哥）",
+            "desc_local": "Español (México)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "es_AR": {
+            "desc_en": "Spanish (Argentina)",
+            "desc_zh": "西班牙语（阿根廷）",
+            "desc_local": "Español (Argentina)",
+            "Available CDragon Data Patches": "9.7+"
+        },
+        "pt_BR": {
+            "desc_en": "Portuguese (Brazil)",
+            "desc_zh": "葡萄牙语（巴西）",
+            "desc_local": "Português (Brasil)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "en_US": {
+            "desc_en": "English (United States)",
+            "desc_zh": "英语（美国）",
+            "desc_local": "English (United States)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "en_AU": {
+            "desc_en": "English (Australia)",
+            "desc_zh": "英语（澳大利亚）",
+            "desc_local": "English (Australia)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "ru_RU": {
+            "desc_en": "Russian (Russia)",
+            "desc_zh": "俄语（俄罗斯）",
+            "desc_local": "Русский (Россия)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "tr_TR": {
+            "desc_en": "Turkish (Turkey)",
+            "desc_zh": "土耳其语（土耳其）",
+            "desc_local": "Türkçe (Türkiye)",
+            "Available CDragon Data Patches": "7.1+"
+        },
+        "ms_MY": {
+            "desc_en": "Malay (Malaysia)",
+            "desc_zh": "马来语（马来西亚）",
+            "desc_local": "Bahasa Melayu (Malaysia)",
+            "Available CDragon Data Patches": ""
+        },
+        "en_PH": {
+            "desc_en": "English (Republic of the Philippines)",
+            "desc_zh": "英语（菲律宾共和国）",
+            "desc_local": "English (Pilipinas)",
+            "Available CDragon Data Patches": "10.5+"
+        },
+        "en_SG": {
+            "desc_en": "English (Singapore)",
+            "desc_zh": "英语（新加坡）",
+            "desc_local": "English (Singapore)",
+            "Available CDragon Data Patches": "10.5+"
+        },
+        "th_TH": {
+            "desc_en": "Thai (Thailand)",
+            "desc_zh": "泰语（泰国）",
+            "desc_local": "ภาษาไทย (ประเทศไทย)",
+            "Available CDragon Data Patches": "9.7+"
+        },
+        "vn_VN": {
+            "desc_en": "Vietnamese (Viet Nam)",
+            "desc_zh": "越南语（越南）",
+            "desc_local": "Tiếng Việt (Việt Nam)",
+            "Available CDragon Data Patches": "9.7～13.9"
+        },
+        "vi_VN": {
+            "desc_en": "Vietnamese (Viet Nam)",
+            "desc_zh": "越南语（越南）",
+            "desc_local": "Tiếng Việt (Việt Nam)",
+            "Available CDragon Data Patches": "12.17+"
+        },
+        "id_ID": {
+            "desc_en": "Indonesian (Indonesia)",
+            "desc_zh": "印度尼西亚语（印度尼西亚）",
+            "desc_local": "Bahasa Indonesia (Indonesia)",
+            "Available CDragon Data Patches": "15.5+"
+        },
+        "zh_MY": {
+            "desc_en": "Chinese (Malaysia)",
+            "desc_zh": "中文（马来西亚）",
+            "desc_local": "中文 (马来西亚)",
+            "Available CDragon Data Patches": "10.5+"
+        },
+        "zh_CN": {
+            "desc_en": "Chinese (China)",
+            "desc_zh": "中文（中国）",
+            "desc_local": "中文 (中国)",
+            "Available CDragon Data Patches": "9.7+"
+        },
+        "zh_TW": {
+            "desc_en": "Chinese (Taiwan)",
+            "desc_zh": "中文（台湾）",
+            "desc_local": "中文 (台灣)",
+            "Available CDragon Data Patches": "9.7+"
+        }
+    }
+    LANGUAGE_DICT: dict[str, list[int | str]] = {
+        "No.": list(range(1, len(LANGUAGE_DDRAGON) + 1)),
+        "CODE": list(LANGUAGE_DDRAGON.keys()),
+        "LANGUAGE": list(map(lambda x: x["desc_local"], LANGUAGE_DDRAGON.values())),
+        "Available CDragon Data Patches": list(map(lambda x: x["Available CDragon Data Patches"], LANGUAGE_DDRAGON.values()))
+    }
+    
     def __init__(self, locale: str = "zh_CN", interval: float = 0.5, config_path: str = DEFAULT_CONFIG_PATH) -> None:
         '''
         构建一个语言管理器对象。<br>Construct a `LoLLocaleManager` object.
@@ -155,11 +527,12 @@ class LoLLocaleManager:
         :param interval: 循环修改模式下检测yaml文件变更的间隔（单位：秒）。默认为0.5秒。<br>The time interval to detect whether the yaml file is changed under Loop Edit Mode, in seconds. 0.5 seconds by default.
         :type interval: float
         '''
+        #可设置的属性（Configurable members）
         self.locale: str = locale #目标语言文化代码（Target language code）
         self.interval: float = interval #循环修改时的读取间隔（Time interval between two reads in Loop Edit mode）
         self.config_path: str = config_path #配置文件路径（Path of configuration file）
+        #自动生成的属性（Automatically generated attributes）
         self.config: configparser.ConfigParser = load_config(self.config_path) #配置文件对象（Configuration file object）
-        
         paths: dict[str, str] = derive_paths(self.config)
         self.rcPath: str = paths["rcPath"] #拳头客户端的可执行文件路径（Path of Riot Client executable）
         self.lolUxPath_live: str = paths["lolUxPath_live"] #正式服联盟客户端用户体验界面可执行文件路径（Path of Live League Client User Experience executable file）
@@ -177,13 +550,111 @@ class LoLLocaleManager:
         self.gt_loc_data: CommentedMap = CommentedMap() #初始化游戏文本语言配置数据（Initialize game text language configuration data）
         self.error_count: int = 0 #错误次数（Number of errors）
     
-    def init_data(self) -> None:
+    def init_loc_data(self) -> None:
         '''
         初始化语言配置数据。<br>Initialize language configuration data.
         '''
         self.rc_loc_data = CommentedMap()
         self.gt_loc_data = CommentedMap()
         self.error_count = 0
+    
+    def set_locale(self, locale: Optional[int | str] = None) -> None:
+        '''
+        设置目标语言文化代码。<br>Set the target language code.
+        
+        :param locale: 目标语言文化代码或编号。如果不指定，则在方法内部询问。<br>Target language code or its corresponding number. If it's not specified, the method will ask the user to specify it.
+        
+            编号可通过本类的`LANGUAGE_DICT`常量查询。<br>The number can be accessed by `LANGUAGE_DICT` constant of this class.
+        :type locale: int | str
+        '''
+        useParam: bool = locale is not None
+        if useParam:
+            if isinstance(locale, int):
+                if locale > 1 and locale <= len(self.LANGUAGE_DDRAGON):
+                    self.locale = list(self.LANGUAGE_DDRAGON.keys())[locale - 1]
+                else:
+                    print("下标越界。将转为手动输入。\nIndex out of bounds. You'll be asked to manually input it.")
+            else:
+                if locale in self.LANGUAGE_DDRAGON:
+                    self.locale = locale
+                else:
+                    print("语言文化代码无效。将转为手动输入。\nInvalid language code. You'll be asked to manually input it.")
+        if not useParam:
+            new_locale: str = self.locale
+            print('请选择目标语言：（输入“0”以取消更改。）\nPlease select the target language: (Submit "0" to cancel the change.)')
+            print(format_dt(self.LANGUAGE_DICT)[0])
+            while True:
+                language_option: str = input()
+                if language_option == "":
+                    new_locale = "zh_CN"
+                    break
+                elif language_option[0] == "0":
+                    break
+                elif language_option in set(map(str, self.LANGUAGE_DICT["No."])):
+                    new_locale = list(self.LANGUAGE_DDRAGON.keys())[int(language_option) - 1]
+                    break
+                else:
+                    print("语言选项输入错误！请重新输入。\nERROR input of language option! Please try again.")
+            if new_locale != self.locale:
+                self.locale = new_locale
+                print("目标语言已设置为%s。\nTarget language has been set to %s." %(self.LANGUAGE_DDRAGON[new_locale]["desc_zh"], self.LANGUAGE_DDRAGON[new_locale]["desc_en"]))
+    
+    def set_interval(self, interval: Optional[float] = None) -> None:
+        '''
+        设置循环间隔。<br>Set the loop interval.
+        
+        :param interval: 循环间隔，单位是秒。如果不指定，则在方法内部询问。<br>Loop interval, in seconds. If it's not specified, the method will ask the user to specify it.
+        :type interval: float
+        '''
+        useParam: bool = interval is not None
+        if useParam:
+            self.interval = interval
+        else:
+            new_interval: float = self.interval
+            print('请设置新的循环间隔，单位是秒。输入“0”以取消更改。\nPlease set the new loop interval, in seconds. Submit "0" to cancel the change.')
+            while True:
+                new_interval_str: str = input()
+                if new_interval_str == "":
+                    continue
+                elif new_interval_str == "0":
+                    break
+                else:
+                    try:
+                        new_interval = float(new_interval_str)
+                    except ValueError:
+                        print("请输入一个数字。\nPlease input a number.")
+                    else:
+                        break
+            if new_interval != self.interval:
+                self.interval = new_interval
+                print(f"循环间隔已设置为{new_interval}秒。\nLoop interval has been set to {new_interval} seconds.")
+
+    def set_config_path(self, config_path: Optional[str] = None) -> None:
+        '''
+        设置配置文件路径。<br>Set the config file path.
+        
+        :param config_path: 通过方法的参数传入的配置文件路径。如果不指定，则在方法内部询问。<br>The config file path passed through the method parameter. If it's not specified, the method will ask the user to specify it.
+        :type config_path: str
+        '''
+        useParam: bool = config_path is not None
+        if useParam:
+            self.config_path = config_path
+        else:
+            print('请输入配置文件路径：（输入“0”以取消更改。）\nPlease input the path of the config file: (Submit "0" to cancel the change.)\n当前配置文件（Current config file）： ' + self.config_path)
+            while True:
+                path: str = input()
+                if path == "":
+                    continue
+                elif path == "0":
+                    break
+                else:
+                    if not os.path.exists(path):
+                        print("路径不存在。请重新输入。\nPath not found. Please try again.")
+                    elif not os.path.isfile(path):
+                        print("请输入一个文件。\nPlease input a file.")
+                    else:
+                        self.config_path = path #接下来将围绕此部分展开校验（A verification will be added to this part）
+                        break
     
     #定义YAML引擎参数调整方法（Define a YAML engine parameter adjustment method）
     def set_yaml_params(self, mapping: int = 4, sequence: int = 4, offset: int = 2, preserve_quotes: bool = True, width: int = 4096) -> None:
@@ -769,15 +1240,32 @@ def change_gt_locale(localeManager: LoLLocaleManager, product: str, patchline: s
     else:
         return 2
 
+#定义主函数（Define the main function）
 def main() -> None:
     print(f"当前配置文件（Current configuration file）：\n{args.config}")
     localeManager: LoLLocaleManager = LoLLocaleManager(args.locale, args.interval, args.config)
     localeManager.set_yaml_params()
-    print("请选择您想要修改语言配置的客户端。\nPlease select the client to change language.\n1\t拳头客户端（Riot Client）\n2\t联盟客户端——正式服（League Client - Live）\n3\t联盟客户端——测试服（League Client - PBE）\n4\t云顶客户端——正式服（TFT Client - Live）\n5\t云顶客户端——测试服（TFT Client - PBE）")
+    print("请选择您想要修改语言配置的客户端。\nPlease select the client to change language.\n-1\t设置（Settings）\n0\t退出程序（Exit the program）\n1\t拳头客户端（Riot Client）\n2\t联盟客户端——正式服（League Client - Live）\n3\t联盟客户端——测试服（League Client - PBE）\n4\t云顶客户端——正式服（TFT Client - Live）\n5\t云顶客户端——测试服（TFT Client - PBE）")
     while True:
         option: str = input()
         if option == "":
             continue
+        elif option == "-1":
+            print("请选择一个设置项：\nPlease select a settings option:\n0\t返回上一层（Return to the last step）\n1\t目标语言（Target language）\n2\t循环间隔（Loop interval）")
+            while True:
+                settings_option: str = input()
+                if settings_option == "":
+                    continue
+                elif settings_option[0] == "0":
+                    break
+                elif settings_option[0] == "1":
+                    localeManager.set_locale()
+                elif settings_option[0] == "2":
+                    localeManager.set_interval()
+                else:
+                    print("您的输入有误！请重新输入。\nERROR input. Please try again.")
+                    continue
+                print("请选择一个设置项：\nPlease select a settings option:\n0\t返回上一层（Return to the last step）\n1\t目标语言（Target language）\n2\t循环间隔（Loop interval）")
         elif option[0] == "0":
             break
         elif option[0] == "1":
@@ -853,8 +1341,8 @@ def main() -> None:
         else:
             print("您的输入有误！请重新输入。\nERROR input! Please try again.")
             continue
-        localeManager.init_data()
-        print("请选择您想要修改语言配置的客户端。\nPlease select the client to change language.\n1\t拳头客户端（Riot Client）\n2\t联盟客户端——正式服（League Client - Live）\n3\t联盟客户端——测试服（League Client - PBE）\n4\t云顶客户端——正式服（TFT Client - Live）\n5\t云顶客户端——测试服（TFT Client - PBE）")
+        localeManager.init_loc_data()
+        print("请选择您想要修改语言配置的客户端。\nPlease select the client to change language.\n-1\t设置（Settings）\n0\t退出程序（Exit the program）\n1\t拳头客户端（Riot Client）\n2\t联盟客户端——正式服（League Client - Live）\n3\t联盟客户端——测试服（League Client - PBE）\n4\t云顶客户端——正式服（TFT Client - Live）\n5\t云顶客户端——测试服（TFT Client - PBE）")
 
 if __name__ == "__main__":
     parser: argparse.ArgumentParser = argparse.ArgumentParser(formatter_class = argparse.RawTextHelpFormatter)
