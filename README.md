@@ -152,8 +152,10 @@ Note: Method One uses the integrated terminal, but requires changing the working
 
 After launching the program, the user may perform the following operations:
 1. Input the number corresponding to an option and press Enter to change the language.
-2. When League Client isn't launched and the user selects changing League Client language, the program will repeat changing the file, until League Client is launched or the user has pressed <ins>Esc</ins>.
-3. Input "0" and press Enter to exit the program.
+    - When League Client isn't launched and the user selects changing League Client language, the program will repeat changing the file, until League Client is launched or the user has pressed <ins>Esc</ins>.
+2. Input "0" and press Enter to exit the program.
+3. Input "-1" and press Enter to set parameters during the program execution.
+    - Currently supports setting <ins>target language</ins>, <ins>loop interval (only for League Client localization)</ins> and <ins>program config file path</ins>.
 
 ## Parameter Notes
 <table>
