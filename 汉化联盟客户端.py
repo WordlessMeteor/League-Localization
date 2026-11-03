@@ -38,111 +38,6 @@ DEFAULT_CONFIG_OBJ: dict[str, dict[str, str]] = {
 }
 DEFAULT_CONFIG_STR: str = "\n" + "\n".join([f"[{scope_key}]\n" + "\n".join([f"{key} = {value}" for key, value in scope.items()]) + "\n" for scope_key, scope in DEFAULT_CONFIG_OBJ.items()])
 
-#定义一些配置文件的操作函数（Define some functions that operation the configuration file）
-def load_config(config_path: str) -> configparser.ConfigParser:
-    '''
-    读取配置文件。<br>Load configuration file.
-    
-    :param config_path: 配置文件路径。<br>Path of configuration file.
-    :type config_path: str
-    :return: 配置文件对象。<br>Configuration file object.
-    :rtype: configparser.ConfigParser
-    '''
-    cfg: configparser.ConfigParser = configparser.ConfigParser()
-    if os.path.exists(config_path) and os.path.isfile(config_path):
-        cfg.read(config_path, encoding = "utf-8")
-    else:
-        cfg.read_string(DEFAULT_CONFIG_STR)
-        with open(config_path, "w", encoding = "utf-8") as fp:
-            cfg.write(fp)
-    if not cfg.has_section("paths"):
-        cfg.add_section("paths")
-    for key, default_value in DEFAULT_CONFIG_OBJ["paths"].items():
-        if not cfg.has_option("paths", key):
-            cfg.set("paths", key, default_value)
-    return cfg
-
-def save_config(config_path: str, cfg: configparser.ConfigParser) -> None:
-    '''
-    保存配置文件。<br>Save configuration file.
-    
-    :param config_path: 配置文件路径。<br>Path of configuration file.
-    :type config_path: str
-    :param cfg: 配置文件对象。<br>Configuration file object.
-    :type cfg: configparser.ConfigParser
-    '''
-    with open(config_path, "w", encoding = "utf-8") as fp:
-        cfg.write(fp)
-
-def derive_paths(cfg: configparser.ConfigParser) -> dict[str, str]:
-    '''
-    从配置文件对象中派生出各路径。<br>Derive paths from configuration file object.
-    
-    通过下面的目录派生其所包含的文件的路径：<br>Derive the paths of files contained in the following directories:
-    - install_dir: 拳头游戏安装目录。<br>Riot games installation directory.
-        - rc_exe: 拳头客户端可执行文件路径。<br>Riot Client executable path.
-        - lol_ux_live: 正式服联盟客户端用户体验界面可执行文件路径。<br>Live League Client User Experience executable file path.
-        - lol_ux_pbe: 测试服联盟客户端用户体验界面可执行文件路径。<br>PBE League Client User Experience executable file path.
-        - tft_exe_live: 正式服云顶客户端可执行文件路径。<br>Live TFT Client executable path.
-        - tft_exe_pbe: 测试服云顶客户端可执行文件路径。<br>PBE TFT Client executable path.
-    - program_data_dir: 拳头游戏程序数据目录。<br>Riot games program data directory.
-        - loc_rc: 拳头客户端语言配置文件路径。<br>Riot Client language configuration file path.
-    - riot_client_config_dir: 拳头客户端配置目录。<br>Riot Client configuration directory.
-        - loc_lol_live: 正式服联盟客户端语言配置文件路径。<br>Live League Client language configuration file path.
-        - loc_lol_pbe: 测试服联盟客户端语言配置文件路径。<br>PBE League Client language configuration file path.
-        - loc_tft_live: 正式服云顶客户端语言配置文件路径。<br>Live TFT Client language configuration file path.
-        - loc_tft_pbe: 测试服云顶客户端语言配置文件路径。<br>PBE TFT Client language configuration file path.
-    
-    :param cfg: 配置文件对象。<br>Configuration file object.
-    :type cfg: configparser.ConfigParser
-    :return: 各路径的字典。<br>Dictionary of paths.
-    :rtype: dict[str, str]
-    '''
-    def norm_path(p: str) -> str:
-        '''
-        标准化路径写法。<br>Normalize path writing.
-        
-        :param p: 待处理的路径。<br>Path to be processed.
-        :type p: str
-        :return: 标准化后的路径。<br>Normalized path.
-        :rtype: str
-        '''
-        return os.path.expanduser(p).replace("\\", "/").rstrip("/")
-    
-    install_dir: str = norm_path(cfg.get("paths", "install_dir"))
-    pd_dir: str = norm_path(cfg.get("paths", "program_data_dir"))
-    rc_cfg_dir: str = norm_path(cfg.get("paths", "riot_client_config_dir"))
-
-    derived: dict[str, str] = {
-        "rcPath": f"{install_dir}/Riot Client/RiotClientServices.exe",
-        "lolUxPath_live": f"{install_dir}/League of Legends/LeagueClientUx.exe",
-        "lolUxPath_pbe": f"{install_dir}/League of Legends (PBE)/LeagueClientUx.exe",
-        "tftClientPath_live": f"{install_dir}/Teamfight Tactics/Live/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe",
-        "tftClientPath_pbe": f"{install_dir}/Teamfight Tactics/PBE/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe",
-        "locPath_rc": f"{rc_cfg_dir}/RiotClientSettings.yaml",
-        "locPath_lol_ux_live": f"{pd_dir}/Metadata/league_of_legends.live/league_of_legends.live.product_settings.yaml",
-        "locPath_lol_ux_pbe": f"{pd_dir}/Metadata/league_of_legends.pbe/league_of_legends.pbe.product_settings.yaml",
-        "locPath_tft_live": f"{pd_dir}/Metadata/teamfighttactics.live/teamfighttactics.live.product_settings.yaml",
-        "locPath_tft_pbe": f"{pd_dir}/Metadata/teamfighttactics.pbe/teamfighttactics.pbe.product_settings.yaml",
-    }
-    override_map: dict[str, str] = {
-        "rcPath": "rc_exe",
-        "lolUxPath_live": "lol_ux_live",
-        "lolUxPath_pbe": "lol_ux_pbe",
-        "tftClientPath_live": "tft_exe_live",
-        "tftClientPath_pbe":  "tft_exe_pbe",
-        "locPath_rc": "loc_rc",
-        "locPath_lol_ux_live": "loc_lol_live",
-        "locPath_lol_ux_pbe": "loc_lol_pbe",
-        "locPath_tft_live": "loc_tft_live",
-        "locPath_tft_pbe": "loc_tft_pbe",
-    } #存储语言管理器中的路径属性成员的名称和配置文件中的键名的映射关系（Store the mapping between the names of path attributes in the locale manager and the key names in the configuration file）
-    for attr, key in override_map.items():
-        v: str = cfg.get("paths", key, fallback = "").strip()
-        if bool(v): #如果配置中单独指定过个别文件的位置，则使用该位置（If some specific file has unqiue location in the config, use this location）
-            derived[attr] = norm_path(v)
-    return derived
-
 #定义用于排版的函数和变量（Define functions and variables for layout optimization）——其实仅用于语言选项的格式化输出（Actually they're only used for formatted output of language options）
 def count_nonASCII(s: str) -> int:
     '''
@@ -543,10 +438,10 @@ class LoLLocaleManager:
         '''
         初始化程序配置数据。<br>Initialize program configuration data.
         '''
-        self.config: configparser.ConfigParser = load_config(self.config_path) #配置文件对象（Configuration file object）
+        self.config: configparser.ConfigParser = self.load_config() #配置文件对象（Configuration file object）
         if not self.verify_config(self.config):
             raise TypeError("Invalid program config data. Please check the format.")
-        paths: dict[str, str] = derive_paths(self.config)
+        paths: dict[str, str] = self.derive_paths(self.config)
         self.rcPath: str = paths["rcPath"] #拳头客户端的可执行文件路径（Path of Riot Client executable）
         self.lolUxPath_live: str = paths["lolUxPath_live"] #正式服联盟客户端用户体验界面可执行文件路径（Path of Live League Client User Experience executable file）
         self.lolUxPath_pbe: str = paths["lolUxPath_pbe"] #测试服联盟客户端用户体验界面可执行文件路径（Path of PBE League Client User Experience executable file）
@@ -565,6 +460,107 @@ class LoLLocaleManager:
         self.rc_loc_data: CommentedMap = CommentedMap() #初始化拳头客户端语言配置数据（Initialize Riot Client language configuration data）
         self.gt_loc_data: CommentedMap = CommentedMap() #初始化游戏文本语言配置数据（Initialize game text language configuration data）
         self.error_count: int = 0 #错误次数（Number of errors）
+    
+    #定义程序配置文件操作方法（Define program config file operation methods）
+    def load_config(self, config_path: Optional[str] = None) -> configparser.ConfigParser: #不能在方法内部直接令`self.config = cfg`而将函数返回值设置为空，因为这个函数还用于配置的校验，那时是不期望直接设置属性的（We can't add `self.config = cfg` to the end of the function and set the return value as None, because this function is also used for config verification, when it's not intended to assign the config attribute）
+        '''
+        读取配置文件。<br>Load configuration file.
+        
+        :param config_path: 配置文件路径。如果未指定，则使用对象中的配置文件路径。<br>Path of configuration file. If it's not specified, then the config file path of the object will be used.
+        :type config_path: str
+        '''
+        if config_path is None:
+            config_path = self.config_path
+        cfg: configparser.ConfigParser = configparser.ConfigParser()
+        if os.path.exists(config_path) and os.path.isfile(config_path):
+            cfg.read(config_path, encoding = "utf-8")
+        else:
+            cfg.read_string(DEFAULT_CONFIG_STR)
+            with open(config_path, "w", encoding = "utf-8") as fp:
+                cfg.write(fp)
+        if not cfg.has_section("paths"):
+            cfg.add_section("paths")
+        for key, default_value in DEFAULT_CONFIG_OBJ["paths"].items():
+            if not cfg.has_option("paths", key):
+                cfg.set("paths", key, default_value)
+        return cfg
+    
+    def save_config(self) -> None:
+        '''
+        保存配置文件。<br>Save configuration file.
+        '''
+        with open(self.config_path, "w", encoding = "utf-8") as fp:
+            self.config.write(fp)
+    
+    @staticmethod
+    def derive_paths(cfg: configparser.ConfigParser) -> dict[str, str]:
+        '''
+        从配置文件对象中派生出各路径。<br>Derive paths from configuration file object.
+        
+        通过下面的目录派生其所包含的文件的路径：<br>Derive the paths of files contained in the following directories:
+        - install_dir: 拳头游戏安装目录。<br>Riot games installation directory.
+            - rc_exe: 拳头客户端可执行文件路径。<br>Riot Client executable path.
+            - lol_ux_live: 正式服联盟客户端用户体验界面可执行文件路径。<br>Live League Client User Experience executable file path.
+            - lol_ux_pbe: 测试服联盟客户端用户体验界面可执行文件路径。<br>PBE League Client User Experience executable file path.
+            - tft_exe_live: 正式服云顶客户端可执行文件路径。<br>Live TFT Client executable path.
+            - tft_exe_pbe: 测试服云顶客户端可执行文件路径。<br>PBE TFT Client executable path.
+        - program_data_dir: 拳头游戏程序数据目录。<br>Riot games program data directory.
+            - loc_rc: 拳头客户端语言配置文件路径。<br>Riot Client language configuration file path.
+        - riot_client_config_dir: 拳头客户端配置目录。<br>Riot Client configuration directory.
+            - loc_lol_live: 正式服联盟客户端语言配置文件路径。<br>Live League Client language configuration file path.
+            - loc_lol_pbe: 测试服联盟客户端语言配置文件路径。<br>PBE League Client language configuration file path.
+            - loc_tft_live: 正式服云顶客户端语言配置文件路径。<br>Live TFT Client language configuration file path.
+            - loc_tft_pbe: 测试服云顶客户端语言配置文件路径。<br>PBE TFT Client language configuration file path.
+        
+        :param cfg: 配置文件对象。<br>Configuration file object.
+        :type cfg: configparser.ConfigParser
+        :return: 各路径的字典。<br>Dictionary of paths.
+        :rtype: dict[str, str]
+        '''
+        def norm_path(p: str) -> str:
+            '''
+            标准化路径写法。<br>Normalize path writing.
+            
+            :param p: 待处理的路径。<br>Path to be processed.
+            :type p: str
+            :return: 标准化后的路径。<br>Normalized path.
+            :rtype: str
+            '''
+            return os.path.expanduser(p).replace("\\", "/").rstrip("/")
+        
+        install_dir: str = norm_path(cfg.get("paths", "install_dir"))
+        pd_dir: str = norm_path(cfg.get("paths", "program_data_dir"))
+        rc_cfg_dir: str = norm_path(cfg.get("paths", "riot_client_config_dir"))
+
+        derived: dict[str, str] = {
+            "rcPath": f"{install_dir}/Riot Client/RiotClientServices.exe",
+            "lolUxPath_live": f"{install_dir}/League of Legends/LeagueClientUx.exe",
+            "lolUxPath_pbe": f"{install_dir}/League of Legends (PBE)/LeagueClientUx.exe",
+            "tftClientPath_live": f"{install_dir}/Teamfight Tactics/Live/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe",
+            "tftClientPath_pbe": f"{install_dir}/Teamfight Tactics/PBE/TFT/Binaries/Win64/TFTClient-Win64-Shipping.exe",
+            "locPath_rc": f"{rc_cfg_dir}/RiotClientSettings.yaml",
+            "locPath_lol_ux_live": f"{pd_dir}/Metadata/league_of_legends.live/league_of_legends.live.product_settings.yaml",
+            "locPath_lol_ux_pbe": f"{pd_dir}/Metadata/league_of_legends.pbe/league_of_legends.pbe.product_settings.yaml",
+            "locPath_tft_live": f"{pd_dir}/Metadata/teamfighttactics.live/teamfighttactics.live.product_settings.yaml",
+            "locPath_tft_pbe": f"{pd_dir}/Metadata/teamfighttactics.pbe/teamfighttactics.pbe.product_settings.yaml",
+        }
+        override_map: dict[str, str] = {
+            "rcPath": "rc_exe",
+            "lolUxPath_live": "lol_ux_live",
+            "lolUxPath_pbe": "lol_ux_pbe",
+            "tftClientPath_live": "tft_exe_live",
+            "tftClientPath_pbe":  "tft_exe_pbe",
+            "locPath_rc": "loc_rc",
+            "locPath_lol_ux_live": "loc_lol_live",
+            "locPath_lol_ux_pbe": "loc_lol_pbe",
+            "locPath_tft_live": "loc_tft_live",
+            "locPath_tft_pbe": "loc_tft_pbe",
+        } #存储语言管理器中的路径属性成员的名称和配置文件中的键名的映射关系（Store the mapping between the names of path attributes in the locale manager and the key names in the configuration file）
+        for attr, key in override_map.items():
+            v: str = cfg.get("paths", key, fallback = "").strip()
+            if bool(v): #如果配置中单独指定过个别文件的位置，则使用该位置（If some specific file has unqiue location in the config, use this location）
+                derived[attr] = norm_path(v)
+        return derived
     
     @staticmethod
     def verify_config(cfg: configparser.ConfigParser) -> bool:
@@ -661,7 +657,7 @@ class LoLLocaleManager:
         useParam: bool = False
         if config_path is not None:
             try:
-                load_config(config_path)
+                self.load_config(config_path = config_path)
             except:
                 print("读取配置文件的过程出现了一个异常。将转为手动输入。\nAn error occurred during the process of reading the config file. You'll be asked to manually input it.")
             else:
@@ -683,7 +679,7 @@ class LoLLocaleManager:
                         print("请输入一个文件。\nPlease input a file.")
                     else:
                         try:
-                            load_config(path)
+                            self.load_config(config_path = path)
                         except:
                             print("读取配置文件的过程出现了一个异常。请切换文件后再试。\nAn error occurred during the process of reading the config file. Please change another file and try again.")
                         else:
@@ -749,7 +745,7 @@ class LoLLocaleManager:
                     self.rcPath = rcPath.replace("\\", "/")
                     self.paths_ready["rcPath"] = True
                     self.config.set("paths", "rc_exe", self.rcPath)
-                    save_config(self.config_path, self.config)
+                    self.save_config()
                     break
         return self.paths_ready["rcPath"]
     
@@ -798,7 +794,7 @@ class LoLLocaleManager:
                         self.lolUxPath_pbe = uxPath_tmp.replace("\\", "/")
                         self.config.set("paths", "lol_ux_pbe", self.lolUxPath_pbe)
                     self.paths_ready[uxPath_key] = True
-                    save_config(self.config_path, self.config)
+                    self.save_config()
                     break
         return self.paths_ready[uxPath_key]
     
@@ -847,7 +843,7 @@ class LoLLocaleManager:
                         self.tftClientPath_pbe = uxPath_tmp.replace("\\", "/")
                         self.config.set("paths", "tft_exe_pbe", self.tftClientPath_pbe)
                     self.paths_ready[uxPath_key] = True
-                    save_config(self.config_path, self.config)
+                    self.save_config()
                     break
         return self.paths_ready[uxPath_key]
     
@@ -879,7 +875,7 @@ class LoLLocaleManager:
                     self.locPath_rc = locPath_rc.replace("\\", "/")
                     self.paths_ready["locPath_rc"] = True
                     self.config.set("paths", "loc_rc", self.locPath_rc)
-                    save_config(self.config_path, self.config)
+                    self.save_config()
                     break
         return self.paths_ready["locPath_rc"]
     
@@ -950,7 +946,7 @@ class LoLLocaleManager:
                             self.locPath_tft_pbe = locPath_ux_tmp.replace("\\", "/")
                             self.config.set("paths", "loc_tft_pbe", self.locPath_tft_pbe)
                     self.paths_ready[locPath_ux_key] = True
-                    save_config(self.config_path, self.config)
+                    self.save_config()
                     break
         return self.paths_ready[locPath_ux_key]
     
