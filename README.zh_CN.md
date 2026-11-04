@@ -23,7 +23,7 @@
 1. 前往[Python官网](https://www.python.org)，下载和安装最新版本的Python。
     - 图文示范可参考[模块：Python安装与全局环境配置](https://zhuanlan.zhihu.com/p/2038292227298996375)一文。
     - 安装前请确保“Add Python.exe to PATH”选项已勾选。
-2. 在命令提示符中输入`pip install ruamel.yaml`以安装ruamel.yaml库。
+2. 在命令提示符中输入`pip install ruamel.yaml wcwidth`以安装wcwidth和ruamel.yaml库。
 3. 复制以下内容，粘贴到记事本，并进行适当改动，保存到用户文件夹（`C:/Users/[用户名]/`）下的“lol-l10n.ini”文件。
     ```ini
     [paths]

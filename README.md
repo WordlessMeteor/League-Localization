@@ -23,7 +23,7 @@ For Riot Client language and TFT game text language, the program only makes the 
 1. Visit [Python official website](https://www.python.org) to download and install the latest Python release.
     - Refer to [Template: Python Installation and Global Environment Setup](https://zhuanlan.zhihu.com/p/2038292227298996375) for demonstration with pictures.
     - Before installation, please make sure "Add Python.exe to PATH" option is checked.
-2. Input `pip install ruamel.yaml` in Command Prompt to install ruamel.yaml library.
+2. Input `pip install ruamel.yaml wcwidth` in Command Prompt to install ruamel.yaml and wcwidth libraries.
 3. Copy the following content, paste it into notepad, make some changes and save it into "lol-l10n.ini" under the user folder (`C:/Users/[User name]`).
     ```ini
     [paths]
